@@ -4,6 +4,26 @@ import pandas as pd
 from datetime import datetime
 import random
 import plotly.express as px
+import streamlit as st
+
+# --- CONFIGURATION PRO ---
+# Remplace par le lien direct vers ton logo GitHub
+LOGO_URL = "https://raw.githubusercontent.com/ton-pseudo/ton-repo/main/logo.png"
+
+st.set_page_config(
+    page_title="Meca 27 - ECN",
+    page_icon=LOGO_URL,
+    layout="centered"
+)
+
+# Injection pour l'installation sur mobile (icône écran d'accueil)
+st.markdown(f"""
+    <head>
+        <link rel="apple-touch-icon" href="{LOGO_URL}">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-title" content="Meca 27">
+    </head>
+    """, unsafe_allow_html=True)
 
 # 1. CONFIGURATION DE LA PAGE
 st.set_page_config(page_title="Vote & Chat Classe", page_icon="💬", layout="centered")
