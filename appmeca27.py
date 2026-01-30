@@ -7,7 +7,7 @@ st.set_page_config(page_title="App de Classe", page_icon="🏫")
 # --- CONNEXION ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(ttl=0).dropna(how="all") # On enlève les lignes vides
+    df = conn.read(ttl60).dropna(how="all") # On enlève les lignes vides
 except Exception as e:
     st.error(f"Erreur de connexion : {e}")
     st.stop()
