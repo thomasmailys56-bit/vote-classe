@@ -6,25 +6,35 @@ import random
 import plotly.express as px
 import streamlit as st
 
-# --- CONFIGURATION PRO ---
-# Remplace par le lien direct vers ton logo GitHub
+# 1. Utilise le lien direct "RAW" de GitHub (celui qui finit par .png)
+# Si tu ne l'as pas encore mis sur GitHub, tu peux utiliser ce lien temporaire pour tester :
 LOGO_URL = "https://raw.githubusercontent.com/ton-pseudo/ton-repo/main/logo.png"
 
 st.set_page_config(
     page_title="Meca 27 - ECN",
-    page_icon=LOGO_URL,
+    page_icon=LOGO_URL, # C'est ici que le logo de l'onglet change
     layout="centered"
 )
 
-# Injection pour l'installation sur mobile (icône écran d'accueil)
+# 2. Cacher le menu Streamlit et forcer l'icône mobile
 st.markdown(f"""
+    <style>
+        /* Cache le bouton "Made with Streamlit" en bas */
+        footer {{visibility: hidden;}}
+        /* Cache le menu en haut à droite pour faire plus "Appli" */
+        #MainMenu {{visibility: hidden;}}
+    </style>
+    
     <head>
         <link rel="apple-touch-icon" href="{LOGO_URL}">
         <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-title" content="Meca 27">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
     </head>
     """, unsafe_allow_html=True)
 
+
+
+    
 # 1. CONFIGURATION DE LA PAGE
 st.set_page_config(page_title="Vote & Chat Classe", page_icon="💬", layout="centered")
 
