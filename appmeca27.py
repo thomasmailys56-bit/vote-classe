@@ -1,22 +1,23 @@
 import streamlit as st
-import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
-st.set_page_config(page_title="Vote Classe Pro", page_icon="🏫")
+st.set_page_config(page_title="Vote Classe", page_icon="🏫")
 
 # --- CONNEXION ---
-# On utilise GSheetsConnection pour pouvoir ÉCRIRE
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- CHARGEMENT DES DONNÉES (Rapide grâce au cache de 60s) ---
-df_users = conn.read(worksheet="Utilisateurs", ttl=60)
-# On essaie de lire l'onglet Votes, s'il n'existe pas on le crée
+# --- CHARGEMENT DES DONNÉES ---
+# On lit tout le classeur
+df_users = conn.read(worksheet="Utilisateurs", ttl=0)
+
 try:
-    df_votes = conn.read(worksheet="Votes", ttl=0) # Les votes doivent être frais (ttl=0)
+    df_votes = conn.read(worksheet="Votes", ttl=0)
 except:
+    # Si l'onglet Votes est vide ou n'existe pas
     df_votes = pd.DataFrame(columns=["Votant", "Cible"])
 
-# --- LOGIN ---
+# --- LOGIQUE DE CONNEXION ---
 if 'connecte' not in st.session_state:
     st.session_state.connecte = False
 
@@ -38,10 +39,10 @@ if not st.session_state.connecte:
 else:
     st.title(f"Salut {st.session_state.user} ! 👋")
     
-    # VERIFICATION SI DÉJÀ VOTÉ DANS LE SHEET
+    # Vérification si déjà voté
     a_deja_vote = False
     if not df_votes.empty:
-        if st.session_state.user in df_votes["Votant"].values:
+        if st.session_state.user in df_votes["Votant"].astype(str).values:
             a_deja_vote = True
 
     if not a_deja_vote:
@@ -49,24 +50,22 @@ else:
         cible = st.radio("Désigne le coupable :", df_users["Nom"].tolist())
         
         if st.button("Confirmer mon vote"):
-            # Création de la nouvelle ligne de vote
             nouveau_vote = pd.DataFrame([{"Votant": st.session_state.user, "Cible": cible}])
-            
-            # Mise à jour du Sheet (C'est ça qui rend le vote permanent !)
             df_final = pd.concat([df_votes, nouveau_vote], ignore_index=True)
-            conn.update(worksheet="Votes", data=df_final)
             
-            st.success("Vote enregistré dans le Google Sheet !")
+            # ÉCRITURE
+            conn.update(worksheet="Votes", data=df_final)
+            st.success("Vote enregistré !")
             st.balloons()
             st.rerun()
     else:
-        st.warning("Tu as déjà voté ! Voici les résultats de la classe :")
+        st.warning("Tu as déjà voté ! Voici les résultats :")
         if not df_votes.empty:
             stats = df_votes["Cible"].value_counts(normalize=True) * 100
             for nom, pct in stats.items():
                 st.write(f"**{nom}** : {int(pct)}%")
                 st.progress(int(pct))
-        
+
     if st.button("Déconnexion"):
         st.session_state.connecte = False
         st.rerun()
