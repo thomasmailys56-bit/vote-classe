@@ -1,32 +1,21 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="App de la Classe", page_icon="🔒")
+# 1. Créer la connexion au Google Sheet
+# Tu devras mettre l'URL de ton Google Sheet dans les secrets de Streamlit après
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Simulation de base de données (À connecter plus tard au Sheets)
-if 'users' not in st.session_state:
-    st.session_state.users = {"admin": "123", "lucas": "pass", "emma": "abc"}
-if 'votes_db' not in st.session_state:
-    st.session_state.votes_db = pd.DataFrame(columns=['votant', 'cible'])
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
+# 2. Lire les données des élèves
+# On imagine que ton onglet s'appelle "Utilisateurs"
+df_eleves = conn.read(worksheet="Utilisateurs")
+liste_eleves = df_eleves["Nom"].tolist() # Récupère la colonne "Nom"
 
-# --- ECRAN DE CONNEXION ---
-if not st.session_state.logged_in:
-    st.title("Connexion 🏫")
-    user = st.text_input("Nom d'utilisateur").lower()
-    pw = st.text_input("Mot de passe", type="password")
-    
-    if st.button("Se connecter"):
-        if user in st.session_state.users and st.session_state.users[user] == pw:
-            st.session_state.logged_in = True
-            st.session_state.user_actuel = user
-            st.rerun()
-        else:
-            st.error("Identifiants incorrects")
-    
-    st.info("Note : Pour l'instant, utilise lucas/pass ou emma/abc")
+st.title("Vote pour la classe")
+
+# 3. Utiliser la vraie liste dans le menu
+choix = st.selectbox("Qui es-tu ?", liste_eleves)
+
 
 # --- INTERFACE DE VOTE ---
 else:
