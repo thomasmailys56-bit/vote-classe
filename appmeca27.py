@@ -122,24 +122,38 @@ else:
                 conn.update(worksheet="Messages", data=pd.concat([df_chat, nouveau_m], ignore_index=True))
                 st.rerun()
 
-    # --- SECTION ADMIN ---
+   # --- SECTION ADMIN ---
     st.divider()
+    
+    # On compare en minuscules pour éviter les erreurs de saisie
+    user_actuel = str(st.session_state.user).strip().lower()
+    elu_du_jour = str(admin_du_jour).strip().lower()
+
     st.write(f"👑 Admin du jour : **{admin_du_jour}**")
     
-    if st.session_state.user == admin_du_jour:
-        deja_fait = not df_q.empty and date_aujourdhui in df_q["Date"].astype(str).values
+    if user_actuel == elu_du_jour:
+        # On vérifie si la question n'est pas déjà validée
+        deja_fait = False
+        if not df_q.empty:
+            # On vérifie la date du jour
+            deja_fait = date_aujourdhui in df_q["Date"].astype(str).values
+
         if not deja_fait:
-            with st.expander("⚙️ OPTIONS ADMIN (Une fois par jour)"):
-                nouvelle_q = st.text_input("Question pour demain :")
-                if st.button("Changer la question", key="admin_btn", use_container_width=True):
+            with st.expander("⚙️ OPTIONS ADMIN (Ton tour !)"):
+                nouvelle_q = st.text_input("Quelle est la question de demain ?")
+                if st.button("Valider la question", use_container_width=True):
                     if nouvelle_q:
-                        # Maj Question
+                        # Mise à jour
                         df_nq = pd.DataFrame([{"Texte": nouvelle_q, "Date": date_aujourdhui, "Auteur": st.session_state.user}])
                         conn.update(worksheet="Question", data=pd.concat([df_q, df_nq], ignore_index=True))
-                        # Reset Votes
+                        # Reset
                         conn.update(worksheet="Votes", data=pd.DataFrame(columns=["Votant", "Cible"]))
-                        st.success("C'est fait !")
+                        st.success("Question envoyée !")
                         st.rerun()
+        else:
+            st.info("✅ Tu as déjà choisi la question pour aujourd'hui !")
+    else:
+        st.write("🔒 Seul l'élu du jour peut modifier la question.")
 
     if st.button("Déconnexion", key="logout_btn"):
         del st.session_state.user
