@@ -120,3 +120,35 @@ else:
                     me = row['Utilisateur'] == st.session_state.user
                     # On utilise l'avatar Streamlit par défaut pour plus de contraste
                     with st.chat_message("user" if not me else "assistant"):
+                        # Texte forcé en gras et noir pour l'utilisateur
+                        st.markdown(f"<span style='color:#000;'>**{row['Utilisateur']}** <small>{row['Heure']}</small></span>", unsafe_allow_html=True)
+                        st.markdown(f"<span style='color:#000;'>{row['Message']}</span>", unsafe_allow_html=True)
+            else:
+                st.write("Aucun message.")
+
+        with st.form("send_msg", clear_on_submit=True):
+            c1, c2 = st.columns([4, 1])
+            msg = c1.text_input("Message...", label_visibility="collapsed")
+            if c2.form_submit_button("Envoyer") and msg:
+                nv_m = pd.DataFrame([{"Utilisateur": st.session_state.user, "Message": msg, "Heure": datetime.now().strftime("%H:%M")}])
+                conn.update(worksheet="Messages", data=pd.concat([df_chat, nv_m], ignore_index=True))
+                st.rerun()
+
+    # --- SECTION ADMIN ---
+    st.divider()
+    st.caption(f"👑 Élu du jour : {admin_du_jour}")
+    
+    if st.session_state.user == admin_du_jour:
+        deja_fait = not df_q.empty and date_aujourdhui in df_q["Date"].astype(str).values
+        if not deja_fait:
+            with st.expander("🛠️ Admin : Changer la question"):
+                new_q = st.text_input("Nouvelle question :")
+                if st.button("Lancer", use_container_width=True) and new_q:
+                    df_nq = pd.DataFrame([{"Texte": new_q, "Date": date_aujourdhui, "Auteur": st.session_state.user}])
+                    conn.update(worksheet="Question", data=pd.concat([df_q, df_nq], ignore_index=True))
+                    conn.update(worksheet="Votes", data=pd.DataFrame(columns=["Votant", "Cible"]))
+                    st.rerun()
+
+    if st.button("Se déconnecter"):
+        del st.session_state.user
+        st.rerun()
