@@ -1,88 +1,68 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="Vote Classe", page_icon="🏫")
+# --- CONFIGURATION ---
+# Remplace bien par TON ID de document entre les guillemets
+SHEET_ID = "1UwQo0lpHDbHw8utmpx5KEmgW0sEHI4opudIHaFRx9nc"
 
-# --- LE MOTEUR (À METTRE ICI) ---
+def get_url(sheet_name):
+    return f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+
+st.set_page_config(page_title="Vote Classe", page_icon="🗳️")
+
+# --- CHARGEMENT DES DONNÉES ---
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    # Lit le premier onglet (Utilisateurs)
-    df_users = conn.read(ttl=0).dropna(how="all")
-    
-    # Lit le deuxième onglet (Votes)
-    # Si l'onglet s'appelle bien "Votes", ça marchera
-    df_votes = conn.read(worksheet="Votes", ttl=0)
-    st.sidebar.success("Connexion Sheets OK !")
+    # Lecture de l'onglet Utilisateurs
+    df_users = pd.read_csv(get_url("Utilisateurs"))
+    # Lecture de l'onglet Votes
+    df_votes = pd.read_csv(get_url("Votes"))
+    st.sidebar.success("✅ Connecté au Google Sheet")
 except Exception as e:
-    st.error(f"Erreur de connexion : {e}")
-    st.info("Vérifie l'URL dans les Secrets et les noms d'onglets (Utilisateurs et Votes)")
-    st.stop() # On arrête tout si la connexion échoue
-
-# --- CONNEXION ---
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    
-    # 1. Test lecture Utilisateurs
-    df_users = conn.read(worksheet="Utilisateurs", ttl=0)
-    st.sidebar.success("✅ Onglet 'Utilisateurs' lu !")
-    
-    # 2. Test lecture ou création Votes
-    try:
-        df_votes = conn.read(worksheet="Votes", ttl=0)
-        st.sidebar.success("✅ Onglet 'Votes' lu !")
-    except:
-        st.sidebar.warning("⚠️ Onglet 'Votes' introuvable ou vide.")
-        df_votes = pd.DataFrame(columns=["Votant", "Cible"])
-
-except Exception as e:
-    st.error(f"❌ Erreur de connexion fatale : {e}")
-    st.info("Vérifie que ton lien dans 'Secrets' est correct et que le Sheet est en 'Tous les utilisateurs disposant du lien : ÉDITEUR'")
+    st.error("❌ Erreur de lecture du Google Sheet")
+    st.info("Vérifie que tes onglets s'appellent exactement 'Utilisateurs' et 'Votes' et que le fichier est partagé en 'Tous les utilisateurs disposant du lien'.")
     st.stop()
 
-# --- INTERFACE DE LOGIN ---
+# --- LOGIN ---
 if 'user' not in st.session_state:
     st.title("Connexion 🔒")
-    nom = st.selectbox("Ton nom", ["Choisir..."] + df_users["Nom"].tolist())
-    mdp = st.text_input("Mot de passe", type="password")
-    
-    if st.button("Entrer"):
-        row = df_users[df_users["Nom"] == nom]
-        if not row.empty and str(row["password"].values[0]) == mdp:
-            st.session_state.user = nom
-            st.rerun()
-        else:
-            st.error("Identifiants incorrects")
+    # On nettoie les noms pour enlever les espaces vides
+    liste_noms = df_users["Nom"].dropna().tolist()
+    user_choisi = st.selectbox("Qui es-tu ?", ["Choisir..."] + liste_noms)
+    mdp_saisi = st.text_input("Mot de passe", type="password")
 
-# --- INTERFACE DE VOTE ---
+    if st.button("Se connecter"):
+        if user_choisi != "Choisir...":
+            # On récupère le vrai mot de passe
+            vrai_mdp = str(df_users[df_users["Nom"] == user_choisi]["password"].values[0])
+            if str(mdp_saisi) == vrai_mdp:
+                st.session_state.user = user_choisi
+                st.rerun()
+            else:
+                st.error("Mot de passe incorrect")
 else:
-    st.title(f"Salut {st.session_state.user} !")
+    # --- INTERFACE DE VOTE ---
+    st.title(f"Salut {st.session_state.user} ! 👋")
     
-    # On vérifie si l'utilisateur a déjà voté
-    a_vote = False
+    # Vérifier si l'utilisateur a déjà voté
+    deja_vote = False
     if not df_votes.empty and "Votant" in df_votes.columns:
         if st.session_state.user in df_votes["Votant"].astype(str).values:
-            a_vote = True
+            deja_vote = True
 
-    if not a_vote:
-        cible = st.radio("Qui est le plus en retard ?", df_users["Nom"].tolist())
-        if st.button("Voter"):
-            try:
-                # Créer le nouveau vote
-                nouveau = pd.DataFrame([{"Votant": st.session_state.user, "Cible": cible}])
-                maj = pd.concat([df_votes, nouveau], ignore_index=True)
-                
-                # ESSAI D'ECRITURE
-                conn.update(worksheet="Votes", data=maj)
-                st.success("Vote enregistré !")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Impossible d'écrire le vote : {e}")
-                st.info("C'est ici que ça bloque : Google refuse l'écriture sans clé JSON 'Service Account'.")
+    if not deja_vote:
+        st.subheader("Qui est le plus en retard ?")
+        cible = st.radio("Désigne un élève :", liste_noms)
+        
+        if st.button("Valider mon vote"):
+            st.success("Vote validé ! (Enregistrement en attente de configuration API)")
+            # Note : L'écriture nécessite la clé JSON, on teste d'abord la lecture.
+            st.balloons()
     else:
-        st.info("Tu as déjà voté. Voici les scores :")
-        st.write(df_votes["Cible"].value_counts())
+        st.warning("Tu as déjà voté !")
+        if not df_votes.empty:
+            st.write("### Résultats actuels")
+            st.bar_chart(df_votes["Cible"].value_counts())
 
-    if st.button("Sortir"):
+    if st.button("Déconnexion"):
         del st.session_state.user
         st.rerun()
