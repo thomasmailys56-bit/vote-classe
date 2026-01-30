@@ -1,17 +1,26 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-st.set_page_config(page_title="Vote Classe", page_icon="🗳️")
+# --- CONFIGURATION ---
+SHEET_ID = "1UwQo0lpHDbHw8utmpx5KEmgW0sEHI4opudIHaFRx9nc"
+# Lien pour lire l'onglet 'Utilisateurs' (le premier par défaut)
+URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
-# --- CONNEXION ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+st.set_page_config(page_title="Vote Classe", page_icon="🏫")
 
-# Lecture des élèves (sans cache pour avoir les nouveaux noms direct)
-df_users = conn.read(ttl=0).dropna(how="all")
+# --- CHARGEMENT DES DONNÉES ---
+@st.cache_data(ttl=0) # Pas de cache pour avoir les modifs en temps réel
+def load_data(url):
+    return pd.read_csv(url)
 
-# --- LOGIQUE DE CONNEXION ---
+try:
+    df_users = load_data(URL_USERS)
+except Exception as e:
+    st.error("Impossible de lire le Google Sheet. Vérifie qu'il est bien partagé en 'Tous les utilisateurs disposant du lien' !")
+    st.stop()
+
+# --- LOGIN ---
 if 'connecte' not in st.session_state:
     st.session_state.connecte = False
 
@@ -29,54 +38,32 @@ if not st.session_state.connecte:
         else:
             st.error("Mauvais mot de passe")
 
-# --- INTERFACE DE VOTE ---
+# --- VOTE ---
 else:
     st.title(f"Salut {st.session_state.user} ! 👋")
+    st.subheader("Question : Qui est le plus en retard ?")
     
-    # 1. Charger les votes actuels pour vérifier si l'user a déjà voté
-    df_votes = conn.read(worksheet="Votes", ttl=0).dropna(how="all")
-    
-    # Vérification : est-ce que mon nom est déjà dans la colonne 'Votant' ?
-    deja_vote = st.session_state.user in df_votes["Votant"].values
+    # Pour le vote, on reste sur un système de session pour l'instant 
+    # car l'écriture (update) demande une configuration de clé API complexe.
+    if 'votes_du_jour' not in st.session_state:
+        st.session_state.votes_du_jour = []
 
-    if not deja_vote:
-        st.subheader("Question du jour : Qui est le plus en retard ?")
+    if st.session_state.user not in [v['votant'] for v in st.session_state.votes_du_jour]:
         cible = st.radio("Désigne le coupable :", df_users["Nom"].tolist())
-        
         if st.button("Valider mon vote"):
-            # Préparation de la nouvelle ligne
-            nouveau_vote = pd.DataFrame([{
-                "Votant": st.session_state.user,
-                "Cible": cible,
-                "Date": datetime.now().strftime("%d/%m/%Y")
-            }])
-            
-            # AJOUT AU GOOGLE SHEET
-            df_maj = pd.concat([df_votes, nouveau_vote], ignore_index=True)
-            conn.update(worksheet="Votes", data=df_maj)
-            
-            st.success("Vote enregistré !")
-            st.balloons()
+            st.session_state.votes_du_jour.append({'votant': st.session_state.user, 'cible': cible})
+            st.success("Vote pris en compte !")
             st.rerun()
     else:
-        st.warning("Tu as déjà voté ! Voici les résultats :")
+        st.warning("Tu as déjà voté aujourd'hui !")
         
-        # Calcul des pourcentages en temps réel
-        if not df_votes.empty:
-            stats = df_votes["Cible"].value_counts(normalize=True) * 100
+        # Affichage des résultats
+        if st.session_state.votes_du_jour:
+            df_v = pd.DataFrame(st.session_state.votes_du_jour)
+            stats = df_v['cible'].value_counts(normalize=True) * 100
             for nom, pct in stats.items():
                 st.write(f"**{nom}** : {int(pct)}%")
                 st.progress(int(pct))
-
-    # --- BOUTON RESET (Seulement pour toi / Admin) ---
-    st.divider()
-    if st.session_state.user == "Lucas": # Change par ton nom
-        if st.button("🗑️ Réinitialiser les votes (Nouvelle question)"):
-            # On crée un tableau vide avec juste les colonnes
-            df_vide = pd.DataFrame(columns=["Votant", "Cible", "Date"])
-            conn.update(worksheet="Votes", data=df_vide)
-            st.success("Votes réinitialisés !")
-            st.rerun()
 
     if st.button("Déconnexion"):
         st.session_state.connecte = False
