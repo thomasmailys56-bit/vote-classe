@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+import random  # <--- AJOUTÉ pour le tirage au sort
 
 st.set_page_config(page_title="Vote Classe", page_icon="🗳️")
 
@@ -28,6 +29,15 @@ try:
 except Exception as e:
     st.error(f"Erreur de connexion : {e}")
     st.stop()
+
+# --- TIRAGE DE L'ADMIN DU JOUR (Fixe pour 24h) ---
+date_aujourdhui = datetime.now().strftime("%d/%m/%Y")
+# On utilise la date comme "graine" pour que le choix soit le même pour tout le monde
+random.seed(int(datetime.now().strftime("%Y%m%d")))
+if liste_noms:
+    admin_du_jour = random.choice(liste_noms)
+else:
+    admin_du_jour = "Aucun"
 
 # --- LOGIN ---
 if 'user' not in st.session_state:
@@ -67,31 +77,46 @@ else:
             st.write("### Résultats")
             st.bar_chart(df_votes["Cible"].value_counts())
 
-    # --- SECTION ADMIN ---
+    # --- SECTION ADMIN ALÉATOIRE ---
     st.divider()
-    with st.expander("⚙️ Modifier la question de demain"):
-        st.write("Changer la question réinitialisera tous les votes.")
-        nouvelle_q = st.text_input("Nouvelle question :", key="input_admin")
-        
-        if st.button("Mettre à jour la question", key="btn_admin"):
-            if nouvelle_q:
-                # 1. On ajoute la nouvelle question à l'historique
-                df_nouvelle_q = pd.DataFrame([{
-                    "Texte": nouvelle_q, 
-                    "Date": datetime.now().strftime("%d/%m/%Y"),
-                    "Auteur": st.session_state.user
-                }])
-                df_q_maj = pd.concat([df_q, df_nouvelle_q], ignore_index=True)
-                conn.update(worksheet="Question", data=df_q_maj)
+    st.write(f"👑 L'administrateur du jour est : **{admin_du_jour}**")
+    
+    # Vérifier si une question a déjà été postée AUJOURD'HUI
+    deja_fait_aujourdhui = False
+    if not df_q.empty:
+        if date_aujourdhui in df_q["Date"].astype(str).values:
+            deja_fait_aujourdhui = True
+
+    # Seul l'admin du jour voit le menu, et seulement s'il n'a pas encore changé la question
+    if st.session_state.user == admin_du_jour:
+        if not deja_fait_aujourdhui:
+            with st.expander("⚙️ Modifier la question (Ton tour !)"):
+                st.write("Tu ne peux changer la question qu'une seule fois par jour.")
+                nouvelle_q = st.text_input("Nouvelle question pour demain :", key="input_admin")
                 
-                # 2. On vide l'onglet Votes
-                df_vide = pd.DataFrame(columns=["Votant", "Cible"])
-                conn.update(worksheet="Votes", data=df_vide)
-                
-                st.success("C'est fait !")
-                st.rerun()
-            else:
-                st.error("Écris quelque chose !")
+                if st.button("Mettre à jour la question", key="btn_admin"):
+                    if nouvelle_q:
+                        # 1. On ajoute la nouvelle question à l'historique
+                        df_nouvelle_q = pd.DataFrame([{
+                            "Texte": nouvelle_q, 
+                            "Date": date_aujourdhui,
+                            "Auteur": st.session_state.user
+                        }])
+                        df_q_maj = pd.concat([df_q, df_nouvelle_q], ignore_index=True)
+                        conn.update(worksheet="Question", data=df_q_maj)
+                        
+                        # 2. On vide l'onglet Votes
+                        df_vide = pd.DataFrame(columns=["Votant", "Cible"])
+                        conn.update(worksheet="Votes", data=df_vide)
+                        
+                        st.success("C'est fait ! La question est enregistrée.")
+                        st.rerun()
+                    else:
+                        st.error("Écris quelque chose !")
+        else:
+            st.success("✅ La question du jour a déjà été validée.")
+    else:
+        st.write("🔒 Tu n'es pas l'administrateur aujourd'hui.")
 
     if st.button("Déconnexion", key="btn_logout"):
         del st.session_state.user
