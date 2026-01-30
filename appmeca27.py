@@ -9,7 +9,7 @@ st.set_page_config(page_title="Vote Classe", page_icon="🗳️")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Lecture des élèves (sans cache pour avoir les nouveaux noms direct)
-df_users = conn.read(worksheet="Utilisateurs", ttl=0).dropna(how="all")
+df_users = conn.read(ttl=0).dropna(how="all")
 
 # --- LOGIQUE DE CONNEXION ---
 if 'connecte' not in st.session_state:
