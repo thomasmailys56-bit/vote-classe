@@ -6,12 +6,11 @@ import random
 import plotly.express as px
 
 # --- 1. CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Meca 27 - Vote", page_icon="🗳️", layout="centered")
+st.set_page_config(page_title="Meca 27 - ECN", page_icon="🗳️", layout="centered")
 
-# --- STYLE CSS (MODIFIÉ POUR LA LISIBILITÉ DU CHAT) ---
+# STYLE CSS (Interface Mobile & Correction Chat)
 st.markdown("""
     <style>
-    /* Style global */
     .main { background-color: #f8f9fa; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] { 
@@ -20,15 +19,9 @@ st.markdown("""
     }
     .stTabs [aria-selected="true"] { background-color: #007BFF !important; color: white !important; border: none; }
     
-    /* CORRECTION CHAT : Texte noir sur bulles visibles */
-    [data-testid="stChatMessage"] {
-        background-color: #f1f3f4 !important;
-        border-radius: 15px;
-        margin-bottom: 10px;
-    }
-    [data-testid="stChatMessage"] p {
-        color: #1f1f1f !important;
-    }
+    /* Correction lisibilité Chat */
+    [data-testid="stChatMessage"] { background-color: #f1f3f4 !important; border-radius: 15px; margin-bottom: 10px; }
+    [data-testid="stChatMessage"] p { color: #1f1f1f !important; }
     
     div[data-testid="stForm"] { border: none; padding: 0; }
     </style>
@@ -55,7 +48,7 @@ try:
     liste_noms = df_users["Nom"].dropna().unique().tolist()
     question_actuelle = df_q.iloc[-1]["Texte"] if not df_q.empty else "Pas de question pour le moment..."
 except Exception as e:
-    st.error(f"Connexion impossible : {e}")
+    st.error(f"Erreur de lecture Google Sheets : {e}")
     st.stop()
 
 # --- 3. LOGIQUE ADMIN ---
@@ -63,24 +56,54 @@ date_aujourdhui = datetime.now().strftime("%d/%m/%Y")
 random.seed(int(datetime.now().strftime("%Y%m%d")))
 admin_du_jour = random.choice(liste_noms) if liste_noms else "Aucun"
 
-# --- 4. AUTHENTIFICATION ---
+# --- 4. AUTHENTIFICATION (CONNEXION / INSCRIPTION) ---
 if 'user' not in st.session_state:
     st.header("🏢 Centrale Nantes")
     st.title("Meca 27 • L'Appli")
     
+    mode = st.radio("Choisis une option :", ["Connexion", "Inscription"], horizontal=True)
+    
     with st.container(border=True):
-        user_choisi = st.selectbox("Qui es-tu ?", ["Choisir mon nom..."] + liste_noms)
-        mdp_saisi = st.text_input("Mot de passe", type="password")
-        if st.button("Se connecter 🔓", use_container_width=True):
-            user_data = df_users[df_users["Nom"] == user_choisi]
-            if not user_data.empty and str(mdp_saisi) == str(user_data["password"].values[0]):
-                st.session_state.user = user_choisi
-                st.rerun()
-            else:
-                st.error("Accès refusé.")
+        if mode == "Connexion":
+            user_choisi = st.selectbox("Qui es-tu ?", ["Choisir mon nom..."] + liste_noms)
+            mdp_saisi = st.text_input("Mot de passe", type="password")
+            
+            if st.button("Se connecter 🔓", use_container_width=True):
+                user_data = df_users[df_users["Nom"] == user_choisi]
+                if not user_data.empty and str(mdp_saisi) == str(user_data["password"].values[0]):
+                    st.session_state.user = user_choisi
+                    st.rerun()
+                else:
+                    st.error("Identifiants incorrects.")
+        
+        else:  # MODE INSCRIPTION
+            new_nom = st.text_input("Prénom et Nom (ex: Lucas B)")
+            new_mdp = st.text_input("Mot de passe", type="password")
+            confirm_mdp = st.text_input("Confirme le mot de passe", type="password")
+            
+            if st.button("Créer mon compte ✨", use_container_width=True):
+                if not new_nom or not new_mdp:
+                    st.error("Remplis tous les champs !")
+                elif new_nom in liste_noms:
+                    st.error("Ce nom existe déjà ! Connecte-toi.")
+                elif new_mdp != confirm_mdp:
+                    st.error("Les mots de passe ne correspondent pas.")
+                else:
+                    # Ajout au DataFrame
+                    nv_user = pd.DataFrame([{"Nom": new_nom, "password": new_mdp}])
+                    maj_users = pd.concat([df_users, nv_user], ignore_index=True)
+                    
+                    conn.update(worksheet="Utilisateurs", data=maj_users)
+                    st.success("Inscription validée !")
+                    
+                    # Connexion automatique
+                    st.session_state.user = new_nom
+                    st.cache_data.clear() # Force la relecture des noms
+                    st.rerun()
+
 else:
-    # --- INTERFACE CONNECTÉE ---
-    st.write(f"Utilisateur : **{st.session_state.user}**")
+    # --- 5. INTERFACE CONNECTÉE ---
+    st.write(f"Connecté en tant que : **{st.session_state.user}**")
     
     tab1, tab2 = st.tabs(["🗳️ Vote du jour", "💬 Chat Promo"])
 
@@ -100,14 +123,11 @@ else:
                     st.balloons()
                     st.rerun()
         else:
-            st.success("Vote enregistré ! Voici les tendances :")
+            st.success("Tu as voté ! Tendances actuelles :")
             if not df_votes.empty:
                 counts = df_votes["Cible"].value_counts().reset_index()
                 counts.columns = ["Nom", "Votes"]
-                
-                fig = px.pie(counts, values='Votes', names='Nom', hole=.6,
-                             color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig.update_traces(textinfo='percent+label')
+                fig = px.pie(counts, values='Votes', names='Nom', hole=.6, color_discrete_sequence=px.colors.qualitative.Pastel)
                 fig.update_layout(showlegend=False, height=350, margin=dict(t=0, b=0, l=0, r=0))
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -118,9 +138,7 @@ else:
             if not df_chat.empty:
                 for _, row in df_chat.iloc[::-1].iterrows():
                     me = row['Utilisateur'] == st.session_state.user
-                    # On utilise l'avatar Streamlit par défaut pour plus de contraste
                     with st.chat_message("user" if not me else "assistant"):
-                        # Texte forcé en gras et noir pour l'utilisateur
                         st.markdown(f"<span style='color:#000;'>**{row['Utilisateur']}** <small>{row['Heure']}</small></span>", unsafe_allow_html=True)
                         st.markdown(f"<span style='color:#000;'>{row['Message']}</span>", unsafe_allow_html=True)
             else:
