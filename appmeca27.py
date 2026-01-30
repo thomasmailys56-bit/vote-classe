@@ -77,7 +77,7 @@ if 'user' not in st.session_state:
                     st.error("Identifiants incorrects.")
         
         else:  # MODE INSCRIPTION
-            new_nom = st.text_input("Prénom et Nom (ex: Lucas B)")
+            new_nom = st.text_input("Surnom")
             new_mdp = st.text_input("Mot de passe", type="password")
             confirm_mdp = st.text_input("Confirme le mot de passe", type="password")
             
