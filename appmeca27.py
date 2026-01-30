@@ -29,7 +29,7 @@ for i, eleve in enumerate(eleves):
         if st.button(eleve, key=eleve):
             # Enregistrement du vote
             nouveau_vote = {'Question': question_du_jour, 'Votant': moi, 'Cible': eleve}
-            st.session_state.votes = st.session_state.votes.append(nouveau_vote, ignore_index=True)
+            st.session_state.votes = pd.concat([st.session_state.votes, pd.DataFrame([nouveau_vote])], ignore_index=True)
             st.success(f"A voté pour {eleve} !")
 
 # 4. Affichage des résultats en pourcentage
