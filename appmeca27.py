@@ -53,3 +53,34 @@ else:
     if st.button("Déconnexion"):
         del st.session_state.user
         st.rerun()
+
+
+# --- SECTION ADMIN : CHOISIR LA PROCHAINE QUESTION ---
+    st.divider()
+    
+    with st.expander("⚙️ Proposer la question de demain"):
+        st.write("Attention : cela effacera aussi les votes actuels.")
+        nouvelle_q = st.text_input("Quelle est la prochaine question ?")
+        
+        if st.button("Mettre à jour la question"):
+            if nouvelle_q:
+                # 1. Enregistrer la nouvelle question
+                df_nouvelle_q = pd.DataFrame([{
+                    "Texte": nouvelle_q, 
+                    "Date": datetime.now().strftime("%d/%m/%Y"),
+                    "Auteur": st.session_state.user
+                }])
+                conn.update(worksheet="Question", data=df_nouvelle_q)
+                
+                # 2. Réinitialiser les votes
+                df_vide = pd.DataFrame(columns=["Votant", "Cible"])
+                conn.update(worksheet="Votes", data=df_vide)
+                
+                st.success("C'est fait ! La question est changée.")
+                st.rerun()
+            else:
+                st.error("Écris une question d'abord !")
+
+    if st.button("Déconnexion"):
+        del st.session_state.user
+        st.rerun()
