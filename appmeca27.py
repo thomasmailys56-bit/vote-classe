@@ -3,7 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 import random
-import plotly.express as px  # <--- Nouveau pour les graphiques
+import plotly.express as px
 
 st.set_page_config(page_title="Vote & Chat Classe", page_icon="💬", layout="centered")
 
@@ -18,18 +18,27 @@ st.markdown("""
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# --- OPTIMISATION QUOTA ---
+# On augmente le TTL pour soulager Google. 
+# Les utilisateurs (mots de passe) ne changent jamais -> 1 heure de cache.
+# Les votes et chat -> 2 secondes de cache (suffisant pour éviter le spam).
 try:
-    df_users = conn.read(worksheet="Utilisateurs", ttl=0)
-    df_votes = conn.read(worksheet="Votes", ttl=0)
-    df_q = conn.read(worksheet="Question", ttl=0)
+    df_users = conn.read(worksheet="Utilisateurs", ttl=3600) 
+    df_votes = conn.read(worksheet="Votes", ttl=2)
+    df_q = conn.read(worksheet="Question", ttl=2)
+    
     try:
-        df_chat = conn.read(worksheet="Messages", ttl=0)
+        df_chat = conn.read(worksheet="Messages", ttl=2)
     except:
         df_chat = pd.DataFrame(columns=["Utilisateur", "Message", "Heure"])
+        
     liste_noms = df_users["Nom"].dropna().unique().tolist()
     question_actuelle = df_q.iloc[-1]["Texte"] if not df_q.empty else "Pas de question !"
 except Exception as e:
-    st.error(f"Erreur de connexion : {e}")
+    if "429" in str(e):
+        st.error("⚠️ Google est fatigué (Quota dépassé). Patiente 30 secondes sans rafraîchir la page.")
+    else:
+        st.error(f"Erreur de connexion : {e}")
     st.stop()
 
 date_aujourdhui = datetime.now().strftime("%d/%m/%Y")
@@ -41,12 +50,14 @@ if 'user' not in st.session_state:
     user_choisi = st.selectbox("Qui es-tu ?", ["Choisir..."] + liste_noms)
     mdp_saisi = st.text_input("Mot de passe", type="password", key="login_mdp")
     if st.button("Se connecter", key="login_btn"):
-        vrai_mdp = str(df_users[df_users["Nom"] == user_choisi]["password"].values[0])
-        if str(mdp_saisi) == vrai_mdp:
-            st.session_state.user = user_choisi
-            st.rerun()
-        else:
-            st.error("Mot de passe incorrect")
+        user_row = df_users[df_users["Nom"] == user_choisi]
+        if not user_row.empty:
+            vrai_mdp = str(user_row["password"].values[0])
+            if str(mdp_saisi) == vrai_mdp:
+                st.session_state.user = user_choisi
+                st.rerun()
+            else:
+                st.error("Mot de passe incorrect")
 else:
     st.title(f"Salut {st.session_state.user} ! 👋")
     
@@ -67,7 +78,6 @@ else:
         else:
             st.success("✅ Ton vote a été pris en compte !")
             if not df_votes.empty:
-                # --- GRAPHIQUE PLOTLY ---
                 df_counts = df_votes["Cible"].value_counts().reset_index()
                 df_counts.columns = ["Nom", "Votes"]
                 
@@ -81,8 +91,6 @@ else:
                 fig.update_traces(textposition='outside', marker_line_color='rgb(8,48,107)', marker_line_width=1.5, opacity=0.8)
                 
                 st.plotly_chart(fig, use_container_width=True)
-                
-                # Petit podium
                 top_name = df_counts.iloc[0]["Nom"]
                 st.markdown(f"<h3 style='text-align: center;'>🏆 Leader : {top_name}</h3>", unsafe_allow_html=True)
 
@@ -101,7 +109,6 @@ else:
             else:
                 st.write("Aucun message...")
 
-        # Formulaire d'envoi collé en bas
         with st.form("chat_form", clear_on_submit=True):
             cols = st.columns([4, 1])
             msg_texte = cols[0].text_input("Message...", label_visibility="collapsed")
@@ -119,6 +126,8 @@ else:
         st.write(f"👑 Admin du jour : **{admin_du_jour}**")
     with col_b:
         if st.button("Déconnexion", key="btn_logout", use_container_width=True):
+            # On vide le cache avant de déconnecter pour éviter les bugs au prochain login
+            st.cache_data.clear()
             del st.session_state.user
             st.rerun()
 
