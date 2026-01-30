@@ -52,9 +52,23 @@ else:
         cible = st.radio("Désigne un élève :", liste_noms)
         
         if st.button("Valider mon vote"):
-            st.success("Vote validé !")
-            st.balloons()
-            # Note : Pour l'instant c'est visuel, l'écriture demande la clé JSON
+            try:
+                # 1. On prépare la nouvelle ligne
+                nouveau_vote = pd.DataFrame([{"Votant": st.session_state.user, "Cible": cible}])
+                
+                # 2. On fusionne avec les anciens votes
+                df_final = pd.concat([df_votes, nouveau_vote], ignore_index=True)
+                
+                # 3. ON ENVOIE AU SHEET (La ligne magique)
+                conn = st.connection("gsheets", type=GSheetsConnection)
+                conn.update(worksheet="Votes", data=df_final)
+                
+                st.success("Vote enregistré dans le Google Sheet !")
+                st.balloons()
+                st.rerun()
+            except Exception as e:
+                st.error("L'écriture a échoué. As-tu configuré le Service Account dans les Secrets ?")
+                st.info(f"Erreur technique : {e}")
     else:
         st.warning("Tu as déjà voté !")
         if not df_votes.empty:
