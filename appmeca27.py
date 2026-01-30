@@ -2,70 +2,72 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="Vote Classe", page_icon="🏫")
+st.set_page_config(page_title="SOS Vote", page_icon="🛠️")
 
 # --- CONNEXION ---
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# --- CHARGEMENT DES DONNÉES ---
-# On lit tout le classeur
-df_users = conn.read(worksheet="Utilisateurs", ttl=0)
-
 try:
-    df_votes = conn.read(worksheet="Votes", ttl=0)
-except:
-    # Si l'onglet Votes est vide ou n'existe pas
-    df_votes = pd.DataFrame(columns=["Votant", "Cible"])
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    
+    # 1. Test lecture Utilisateurs
+    df_users = conn.read(worksheet="Utilisateurs", ttl=0)
+    st.sidebar.success("✅ Onglet 'Utilisateurs' lu !")
+    
+    # 2. Test lecture ou création Votes
+    try:
+        df_votes = conn.read(worksheet="Votes", ttl=0)
+        st.sidebar.success("✅ Onglet 'Votes' lu !")
+    except:
+        st.sidebar.warning("⚠️ Onglet 'Votes' introuvable ou vide.")
+        df_votes = pd.DataFrame(columns=["Votant", "Cible"])
 
-# --- LOGIQUE DE CONNEXION ---
-if 'connecte' not in st.session_state:
-    st.session_state.connecte = False
+except Exception as e:
+    st.error(f"❌ Erreur de connexion fatale : {e}")
+    st.info("Vérifie que ton lien dans 'Secrets' est correct et que le Sheet est en 'Tous les utilisateurs disposant du lien : ÉDITEUR'")
+    st.stop()
 
-if not st.session_state.connecte:
+# --- INTERFACE DE LOGIN ---
+if 'user' not in st.session_state:
     st.title("Connexion 🔒")
-    user_choisi = st.selectbox("Qui es-tu ?", ["Choisir..."] + df_users["Nom"].tolist())
-    mdp_saisi = st.text_input("Mot de passe", type="password")
-
-    if st.button("Se connecter"):
-        vrai_mdp = str(df_users[df_users["Nom"] == user_choisi]["password"].values[0])
-        if str(mdp_saisi) == vrai_mdp:
-            st.session_state.connecte = True
-            st.session_state.user = user_choisi
+    nom = st.selectbox("Ton nom", ["Choisir..."] + df_users["Nom"].tolist())
+    mdp = st.text_input("Mot de passe", type="password")
+    
+    if st.button("Entrer"):
+        row = df_users[df_users["Nom"] == nom]
+        if not row.empty and str(row["password"].values[0]) == mdp:
+            st.session_state.user = nom
             st.rerun()
         else:
-            st.error("Mauvais mot de passe")
+            st.error("Identifiants incorrects")
 
 # --- INTERFACE DE VOTE ---
 else:
-    st.title(f"Salut {st.session_state.user} ! 👋")
+    st.title(f"Salut {st.session_state.user} !")
     
-    # Vérification si déjà voté
-    a_deja_vote = False
-    if not df_votes.empty:
+    # On vérifie si l'utilisateur a déjà voté
+    a_vote = False
+    if not df_votes.empty and "Votant" in df_votes.columns:
         if st.session_state.user in df_votes["Votant"].astype(str).values:
-            a_deja_vote = True
+            a_vote = True
 
-    if not a_deja_vote:
-        st.subheader("Qui est le plus en retard ?")
-        cible = st.radio("Désigne le coupable :", df_users["Nom"].tolist())
-        
-        if st.button("Confirmer mon vote"):
-            nouveau_vote = pd.DataFrame([{"Votant": st.session_state.user, "Cible": cible}])
-            df_final = pd.concat([df_votes, nouveau_vote], ignore_index=True)
-            
-            # ÉCRITURE
-            conn.update(worksheet="Votes", data=df_final)
-            st.success("Vote enregistré !")
-            st.balloons()
-            st.rerun()
+    if not a_vote:
+        cible = st.radio("Qui est le plus en retard ?", df_users["Nom"].tolist())
+        if st.button("Voter"):
+            try:
+                # Créer le nouveau vote
+                nouveau = pd.DataFrame([{"Votant": st.session_state.user, "Cible": cible}])
+                maj = pd.concat([df_votes, nouveau], ignore_index=True)
+                
+                # ESSAI D'ECRITURE
+                conn.update(worksheet="Votes", data=maj)
+                st.success("Vote enregistré !")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Impossible d'écrire le vote : {e}")
+                st.info("C'est ici que ça bloque : Google refuse l'écriture sans clé JSON 'Service Account'.")
     else:
-        st.warning("Tu as déjà voté ! Voici les résultats :")
-        if not df_votes.empty:
-            stats = df_votes["Cible"].value_counts(normalize=True) * 100
-            for nom, pct in stats.items():
-                st.write(f"**{nom}** : {int(pct)}%")
-                st.progress(int(pct))
+        st.info("Tu as déjà voté. Voici les scores :")
+        st.write(df_votes["Cible"].value_counts())
 
-    if st.button("Déconnexion"):
-        st.session_state.connecte = False
+    if st.button("Sortir"):
+        del st.session_state.user
         st.rerun()
