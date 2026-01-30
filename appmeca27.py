@@ -2,7 +2,22 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="SOS Vote", page_icon="🛠️")
+st.set_page_config(page_title="Vote Classe", page_icon="🏫")
+
+# --- LE MOTEUR (À METTRE ICI) ---
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Lit le premier onglet (Utilisateurs)
+    df_users = conn.read(ttl=0).dropna(how="all")
+    
+    # Lit le deuxième onglet (Votes)
+    # Si l'onglet s'appelle bien "Votes", ça marchera
+    df_votes = conn.read(worksheet="Votes", ttl=0)
+    st.sidebar.success("Connexion Sheets OK !")
+except Exception as e:
+    st.error(f"Erreur de connexion : {e}")
+    st.info("Vérifie l'URL dans les Secrets et les noms d'onglets (Utilisateurs et Votes)")
+    st.stop() # On arrête tout si la connexion échoue
 
 # --- CONNEXION ---
 try:
