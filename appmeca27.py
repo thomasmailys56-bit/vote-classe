@@ -4,10 +4,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 
-# --- CONFIGURATION ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Meca 27 - Vote", page_icon="🗳️")
 
-# CSS Minimaliste pour éviter les conflits
+# CSS pour l'interface
 st.markdown("""
     <style>
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
@@ -16,7 +16,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONNEXION DONNÉES ---
+# --- 2. CONNEXION DONNÉES ---
 SHEET_ID = "1UwQo0lpHDbHw8utmpx5KEmgW0sEHI4opudIHaFRx9nc"
 
 def load_data(sheet_name):
@@ -39,10 +39,10 @@ try:
     q_row = df_q[df_q["Date"].astype(str) == date_auj]
     question_actuelle = q_row.iloc[-1]["Texte"] if not q_row.empty else "Pas de question aujourd'hui ! 😴"
 except Exception as e:
-    st.error("⚠️ Problème de connexion au Google Sheet. Vérifie les noms des onglets.")
+    st.error("⚠️ Problème de connexion au Google Sheet.")
     st.stop()
 
-# --- AUTHENTIFICATION ---
+# --- 3. AUTHENTIFICATION ---
 if 'user' not in st.session_state:
     st.title("🏢 Meca 27")
     mode = st.radio("Option :", ["Connexion", "Inscription"], horizontal=True)
@@ -56,7 +56,8 @@ if 'user' not in st.session_state:
                 if not user_row.empty and str(mdp_saisi) == str(user_row["password"].values[0]):
                     st.session_state.user = user_sel
                     st.rerun()
-                else: st.error("Identifiants incorrects.")
+                else:
+                    st.error("Identifiants incorrects.")
         else:
             new_nom = st.text_input("Nouveau Surnom")
             new_mdp = st.text_input("Nouveau Mot de passe", type="password")
@@ -67,10 +68,11 @@ if 'user' not in st.session_state:
                     st.session_state.user = new_nom
                     st.cache_data.clear()
                     st.rerun()
-                else: st.error("Nom déjà pris ou invalide.")
+                else:
+                    st.error("Nom déjà pris ou invalide.")
 
 else:
-    # --- INTERFACE ---
+    # --- 4. INTERFACE ---
     demain = (datetime.now() + timedelta(days=1)).replace(hour=0, minute=0, second=0)
     temps_restant = demain - datetime.now()
     h, r = divmod(temps_restant.seconds, 3600)
@@ -95,7 +97,6 @@ else:
             if not df_votes.empty:
                 counts = df_votes["Cible"].value_counts().reset_index()
                 counts.columns = ["Nom", "Votes"]
-                # Graphique Barres épuré
                 fig = px.bar(counts, x="Votes", y="Nom", orientation='h', text="Votes")
                 fig.update_layout(xaxis={'visible': False}, yaxis={'title': ''}, height=300, margin=dict(t=0, b=0, l=0, r=0))
                 fig.update_traces(textposition='outside')
@@ -104,8 +105,9 @@ else:
     with tab2:
         chat_box = st.container(height=300, border=True)
         with chat_box:
-            for _, row in df_chat.iloc[::-1].iterrows():
-                st.markdown(f"**{row['Utilisateur']}** : {row['Message']}")
+            if not df_chat.empty:
+                for _, row in df_chat.iloc[::-1].iterrows():
+                    st.markdown(f"**{row['Utilisateur']}** : {row['Message']}")
         
         with st.form("chat_form", clear_on_submit=True):
             m = st.text_input("Ton message...")
@@ -114,8 +116,9 @@ else:
                 conn.update(worksheet="Messages", data=pd.concat([df_chat, nv_m], ignore_index=True))
                 st.rerun()
 
-    # --- FOOTER ---
+    # --- 5. DÉCONNEXION ---
     st.divider()
     if st.button("Déconnexion 🚪"):
-        for key in list(st.session_state.keys()): del st.session_state[key]
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
